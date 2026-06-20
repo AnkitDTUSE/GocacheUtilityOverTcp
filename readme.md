@@ -75,7 +75,7 @@ Clients send JSON requests to the server:
 {
   "cmd": "SET",
   "key": "name",
-  "value": "Ankit"
+  "value": "Lora"
 }
 ```
 
@@ -90,10 +90,10 @@ Every successful `SET` operation is appended to a CSV file.
 Example:
 
 ```csv
-Vineet,panchal
-Vineet,singh
-Vineet,Kumar
-Sanjay,panchal
+path,C:
+dbKey,<myKey>
+username,softDik
+pass,12344444
 ```
 
 This append-only strategy minimizes disk writes and mimics concepts used in Redis AOF (Append Only File) persistence.
@@ -154,7 +154,7 @@ Request:
 {
   "cmd": "SET",
   "key": "name",
-  "value": "Ankit"
+  "value": "Lora"
 }
 ```
 
@@ -182,7 +182,7 @@ Request:
 Response:
 
 ```text
-Ankit
+Lora
 ```
 
 ---
@@ -239,9 +239,9 @@ cli.Connect()
 ### Writing Data
 
 ```go
-cli.Set("Vineet", "panchal")
-cli.Set("Vineet", "singh")
-cli.Set("Vineet", "Kumar")
+cli.Set("path", "C:")
+cli.Set("username", "softDik")
+cli.Set("pass", "1234444")
 ```
 
 ---
@@ -249,14 +249,14 @@ cli.Set("Vineet", "Kumar")
 ### Reading Data
 
 ```go
-value, _ := cli.Get("Vineet")
+value, _ := cli.Get("path")
 fmt.Println(value)
 ```
 
 Output:
 
 ```text
-Kumar
+C:
 ```
 
 ---
