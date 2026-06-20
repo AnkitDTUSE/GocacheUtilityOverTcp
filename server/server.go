@@ -1,4 +1,4 @@
-package Server
+package server
 
 import (
 	"encoding/csv"
@@ -9,7 +9,8 @@ import (
 
 var DataStorage = make(map[string]string)
 
-func LoadData(mpp *map[string]string) {
+func LoadData() {
+	mpp := &DataStorage
 	db, _ := os.OpenFile("db.csv", os.O_RDONLY, 0644)
 
 	defer db.Close() // close the file
@@ -30,21 +31,14 @@ func LoadData(mpp *map[string]string) {
 
 }
 
-func Start(port int, connectionType  string) error {
-	
-
-	return nil
-}
-
-
-func main() {
-	listener, err := net.Listen("tcp", ":3000")
+func Start(port int, connectionType string) error {
+	listener, err := net.Listen(connectionType, fmt.Sprintf(":%v", port))
 
 	if err != nil {
 		fmt.Println("error while starting server")
 	}
 
-	go LoadData(&DataStorage)
+	go LoadData()
 	defer listener.Close()
 
 	for {
@@ -52,9 +46,11 @@ func main() {
 
 		if err != nil {
 			fmt.Println("error while listening to the address")
+			return err
 		}
 
 		go CacheUtil(&DataStorage, conn)
 
 	}
+
 }
