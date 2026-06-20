@@ -1,3 +1,3 @@
-module github.com/AnkitPanchal/my-go-library
+module github.com/AnkitDTUSE/GocacheUtilityOverTcp
 
 go 1.26.3
