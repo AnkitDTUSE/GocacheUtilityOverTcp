@@ -24,6 +24,9 @@ func CacheUtil(mpp *map[string]string, conn net.Conn) {
 
 	reader := bufio.NewReader(conn)
 
+	dbReopen, _ := os.OpenFile("db.csv", os.O_APPEND|os.O_RDWR|os.O_CREATE, 0644)
+	defer dbReopen.Close()
+
 	for {
 		request, err := reader.ReadString('\n')
 
@@ -43,9 +46,6 @@ func CacheUtil(mpp *map[string]string, conn net.Conn) {
 			fmt.Println("error decoding request:", err)
 			return
 		}
-
-		dbReopen, _ := os.OpenFile("db.csv", os.O_APPEND|os.O_RDWR, 0644)
-		defer dbReopen.Close()
 
 		switch data["cmd"] {
 		case "SET":
