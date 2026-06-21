@@ -2,9 +2,9 @@
 
 A lightweight Redis-inspired key-value cache built in Go with TCP networking support.
 
-This project is the successor to my earlier local cache implementation and extends it into a networked client-server architecture. The cache supports multiple TCP clients, persistent storage, append-only logging, startup recovery, and manual log compaction.
+GoCache Utility Over TCP is a simple client-server cache system that allows applications to store and retrieve key-value pairs over a TCP connection. The server maintains an in-memory cache for high-speed access while persisting data to disk using an append-only storage model.
 
-The goal of this project is to understand how distributed cache systems and in-memory databases communicate over the network while maintaining persistence and high-speed data access.
+This project was built to explore concepts behind distributed cache systems such as Redis, including networking, persistence, startup recovery, concurrent client handling, and log compaction.
 
 ---
 
@@ -14,11 +14,11 @@ The goal of this project is to understand how distributed cache systems and in-m
 * In-memory key-value storage
 * Persistent CSV-backed storage
 * Append-only write strategy
-* Automatic recovery on server startup
+* Automatic recovery on startup
 * Manual log compaction
 * JSON-based request protocol
 * Concurrent client handling using Goroutines
-* Fast lookups using Go maps
+* Fast O(1) average lookups using Go maps
 
 ---
 
@@ -47,7 +47,7 @@ The goal of this project is to understand how distributed cache systems and in-m
 +------------------+
 ```
 
-The server maintains the cache in memory while persisting writes to disk.
+The server keeps all active data in memory while persisting updates to disk.
 
 Clients communicate with the server using JSON messages over TCP.
 
@@ -57,25 +57,27 @@ Clients communicate with the server using JSON messages over TCP.
 
 ### In-Memory Storage
 
-The server stores data in a Go map:
+The cache uses:
 
 ```go
 map[string]string
 ```
 
-This allows near O(1) average lookup and insertion performance.
+This provides near O(1) average lookup and insertion performance.
 
 ---
 
 ### TCP Communication
 
-Clients send JSON requests to the server:
+Clients send JSON requests to the server.
+
+Example:
 
 ```json
 {
   "cmd": "SET",
   "key": "name",
-  "value": "Lora"
+  "value": "YourName"
 }
 ```
 
@@ -91,26 +93,23 @@ Example:
 
 ```csv
 path,C:
-dbKey,<myKey>
-username,softDik
-pass,12344444
+username,<User>
+password,123456
 ```
 
-This append-only strategy minimizes disk writes and mimics concepts used in Redis AOF (Append Only File) persistence.
+This append-only strategy minimizes disk writes and mimics Redis AOF (Append Only File) persistence.
 
 ---
 
 ### Startup Recovery
 
-When the server starts, it loads data from `db.csv`.
+When the server starts, it loads all records from `db.csv` and reconstructs the latest state of the cache.
 
 Example:
 
 ```go
 LoadData()
 ```
-
-The latest value for every key is reconstructed by replaying the log file.
 
 ---
 
@@ -126,13 +125,7 @@ user,Bob
 user,Charlie
 ```
 
-After running:
-
-```text
-COMPACT
-```
-
-The database file becomes:
+After compaction:
 
 ```csv
 user,Charlie
@@ -154,7 +147,7 @@ Request:
 {
   "cmd": "SET",
   "key": "name",
-  "value": "Lora"
+  "value": "YourName"
 }
 ```
 
@@ -182,14 +175,14 @@ Request:
 Response:
 
 ```text
-Lora
+YourName
 ```
 
 ---
 
 ### COMPACT
 
-Rewrite the database file using only the latest values currently stored in memory.
+Rewrite the database file using only the latest values stored in memory.
 
 Request:
 
@@ -207,41 +200,158 @@ Compaction Complete
 
 ---
 
-## Example Usage
+## Installation
 
-### Starting the Server
+Install the package:
 
-```go
-go s.Start(3000, "tcp")
+```bash
+go get github.com/AnkitDTUSE/GocacheUtilityOverTcp@latest
+```
+
+Update dependencies:
+
+```bash
+go mod tidy
 ```
 
 ---
 
-### Creating a Client
+## Library Structure
+
+Actual package structure:
+
+```text
+GocacheUtilityOverTcp
+├── client
+│   └── client.go
+│
+├── server
+│   ├── cacheUtil.go
+│   ├── compact.go
+│   └── server.go
+│
+├── go.mod
+├── go.sum
+└── README.md
+```
+
+---
+
+## Recommended Project Structure
+
+When using this library, it is recommended to run the server as a separate process.
+
+Example:
+
+```text
+my-project
+├── server
+│   ├── db.csv
+│   ├── server.go
+│   ├── go.mod
+│   └── go.sum
+│
+├── client.go
+├── go.mod
+└── go.sum
+```
+
+The server should be started before any client attempts to connect.
+
+---
+
+## Starting the Server
+
+Create `server/server.go`:
 
 ```go
-cli := c.Client{
-    Port:           3000,
-    ConnectionType: "tcp",
+package main
+
+import (
+	"fmt"
+
+	s "github.com/AnkitDTUSE/GocacheUtilityOverTcp/server"
+)
+
+func main() {
+	err := s.Start(3000, "tcp")
+
+	if err != nil {
+		fmt.Println("Error while starting server")
+	}
 }
 ```
 
+Run the server:
+
+```bash
+cd server
+go run .
+```
+
+The server will:
+
+* Listen on port `3000`
+* Create or load `db.csv`
+* Recover previously stored data
+* Accept multiple concurrent client connections
+
 ---
 
-### Connecting
+## Creating a Client
+
+Create `client.go`:
 
 ```go
-cli.Connect()
+package main
+
+import (
+	"fmt"
+
+	c "github.com/AnkitDTUSE/GocacheUtilityOverTcp/client"
+)
+
+func main() {
+
+	cli := c.Client{
+		Port:           3000,
+		ConnectionType: "tcp",
+		ConnObj:        nil,
+	}
+
+	cli.Connect()
+
+	cli.Set("key", "asgdjkashdf5789")
+
+	value, err := cli.Get("key")
+
+	if err != nil {
+		fmt.Println("error while fetching GET request")
+	}
+
+	fmt.Println(value)
+
+	cli.Compact()
+
+	defer cli.Disconnect()
+}
+```
+
+Run:
+
+```bash
+go run client.go
 ```
 
 ---
+
+## Example Operations
 
 ### Writing Data
 
 ```go
-cli.Set("path", "C:")
-cli.Set("username", "softDik")
-cli.Set("pass", "1234444")
+cli.Set("username", "<User>")
+cli.Set("password", "123456")
 ```
 
 ---
@@ -249,14 +359,17 @@ cli.Set("pass", "1234444")
 ### Reading Data
 
 ```go
-value, _ := cli.Get("path")
-fmt.Println(value)
+value, err := cli.Get("username")
+
+if err == nil {
+	fmt.Println(value)
+}
 ```
 
 Output:
 
 ```text
-C:
+Ankit
 ```
 
 ---
@@ -277,21 +390,18 @@ cli.Disconnect()
 
 ---
 
-## Project Structure
+## Typical Workflow
 
 ```text
-.
-├── client
-│   └── client.go
-│
-├── server
-│   ├── server.go
-│   ├── cache.go
-│   └── persistence.go
-│
-├── db.csv
-├── main.go
-└── README.md
+1. Start Server
+       ↓
+2. Connect Client
+       ↓
+3. SET / GET Operations
+       ↓
+4. COMPACT (Optional)
+       ↓
+5. Disconnect Client
 ```
 
 ---
@@ -300,7 +410,7 @@ cli.Disconnect()
 
 This project helped deepen understanding of:
 
-* TCP Networking in Go
+* TCP Networking
 * Client-Server Architecture
 * JSON Serialization
 * Goroutines
@@ -311,7 +421,7 @@ This project helped deepen understanding of:
 * Log Compaction
 * File Handling
 * Database Recovery
-* System Design Fundamentals
+* Systems Programming in Go
 
 ---
 
@@ -332,7 +442,7 @@ This project helped deepen understanding of:
 | Transactions        | ✅     | ❌               |
 | TTL Expiry          | ✅     | ❌               |
 
-This project is not intended to replace Redis. It is an educational implementation focused on understanding the internals of networked cache systems.
+This project is intended as an educational implementation and is not meant to replace Redis.
 
 ---
 
@@ -348,33 +458,8 @@ This project is not intended to replace Redis. It is an educational implementati
 * Replication between servers
 * REST API Gateway
 * Docker support
-* Unit and integration tests
-
----
-
-## Installation
-
-Clone the repository:
-
-```bash
-git clone https://github.com/AnkitDTUSE/GocacheUtilityOverTcp.git
-```
-
-```bash
-cd GocacheUtilityOverTcp
-```
-
-Install dependencies:
-
-```bash
-go mod tidy
-```
-
-Run:
-
-```bash
-go run .
-```
+* Unit tests
+* Integration tests
 
 ---
 
@@ -382,4 +467,4 @@ go run .
 
 **Ankit Panchal**
 
-Built as a systems programming project to explore the foundations of Redis-style cache servers, persistence mechanisms, and networked database design in Go.
+Built to explore the foundations of Redis-style cache servers, persistence mechanisms, networking, and systems programming in Go.
