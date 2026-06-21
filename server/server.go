@@ -11,7 +11,7 @@ var DataStorage = make(map[string]string)
 
 func LoadData() {
 	mpp := &DataStorage
-	db, _ := os.OpenFile("db.csv", os.O_RDONLY, 0644)
+	db, _ := os.OpenFile("db.csv", os.O_RDONLY|os.O_CREATE, 0644)
 
 	defer db.Close() // close the file
 
