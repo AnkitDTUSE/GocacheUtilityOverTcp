@@ -13,7 +13,7 @@ func LoadData() {
 	mpp := &DataStorage
 	db, _ := os.OpenFile("db.csv", os.O_RDONLY|os.O_CREATE, 0644)
 
-	defer db.Close() // close the file
+	defer db.Close() 
 
 	if dbInfo, _ := db.Stat(); dbInfo.Size() != 0 {
 
