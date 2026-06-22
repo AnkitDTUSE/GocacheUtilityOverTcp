@@ -19,6 +19,14 @@ type Client struct {
 	ConnObj        net.Conn
 }
 
+func NewClient(port int, connType string, conn net.Conn) *Client {
+	return &Client{
+		Port:           port,
+		ConnectionType: connType,
+		ConnObj:        conn,
+	}
+}
+
 func (c *Client) Connect() (net.Conn, error) {
 	conn, err := net.Dial(c.ConnectionType, fmt.Sprintf(":%v", c.Port))
 	c.ConnObj = conn
