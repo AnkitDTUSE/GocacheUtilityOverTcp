@@ -19,11 +19,11 @@ type Client struct {
 	ConnObj        net.Conn
 }
 
-func NewClient(port int, connType string, conn net.Conn) *Client {
+func NewClient(port int, connType string, connObject net.Conn) *Client {
 	return &Client{
 		Port:           port,
 		ConnectionType: connType,
-		ConnObj:        conn,
+		ConnObj:        connObject,
 	}
 }
 
