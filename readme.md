@@ -19,6 +19,7 @@ This project was built to explore concepts behind distributed cache systems such
 * JSON-based request protocol
 * Concurrent client handling using Goroutines
 * Fast O(1) average lookups using Go maps
+* Simple client constructor API
 
 ---
 
@@ -97,7 +98,7 @@ username,<User>
 password,123456
 ```
 
-This append-only strategy minimizes disk writes and mimics Redis AOF (Append Only File) persistence.
+This append-only strategy minimizes disk writes and mimics Redis-style AOF (Append Only File) persistence.
 
 ---
 
@@ -218,8 +219,6 @@ go mod tidy
 
 ## Library Structure
 
-Actual package structure:
-
 ```text
 GocacheUtilityOverTcp
 ├── client
@@ -240,8 +239,6 @@ GocacheUtilityOverTcp
 ## Recommended Project Structure
 
 When using this library, it is recommended to run the server as a separate process.
-
-Example:
 
 ```text
 my-project
@@ -313,13 +310,10 @@ import (
 
 func main() {
 
-	cli := c.Client{
-		Port:           3000,
-		ConnectionType: "tcp",
-		ConnObj:        nil,
-	}
+	cli := c.NewClient(3000, "tcp", nil)
 
 	cli.Connect()
+	defer cli.Disconnect()
 
 	cli.Set("key", "asgdjkashdf5789")
 
@@ -327,13 +321,12 @@ func main() {
 
 	if err != nil {
 		fmt.Println("error while fetching GET request")
+		return
 	}
 
 	fmt.Println(value)
 
 	cli.Compact()
-
-	defer cli.Disconnect()
 }
 ```
 
@@ -341,6 +334,74 @@ Run:
 
 ```bash
 go run client.go
+```
+
+---
+
+## Client Constructor
+
+The client package provides a constructor for creating client instances.
+
+```go
+cli := c.NewClient(3000, "tcp", nil)
+```
+
+Parameters:
+
+| Parameter      | Type     | Description                                |
+| -------------- | -------- | ------------------------------------------ |
+| port           | int      | TCP port of the cache server               |
+| connectionType | string   | Network protocol (typically `"tcp"`)       |
+| connObj        | net.Conn | Existing connection object (usually `nil`) |
+
+Example:
+
+```go
+cli := c.NewClient(3000, "tcp", nil)
+```
+
+This constructor simplifies initialization and follows idiomatic Go design patterns.
+
+---
+
+## Example Usage
+
+```go
+package main
+
+import (
+	"fmt"
+
+	c "github.com/AnkitDTUSE/GocacheUtilityOverTcp/client"
+)
+
+func main() {
+
+	cli := c.NewClient(3000, "tcp", nil)
+
+	cli.Connect()
+	defer cli.Disconnect()
+
+	cli.Set("key", "asgdjkashdf5789")
+
+	value, err := cli.Get("key")
+
+	if err != nil {
+		fmt.Println("error while fetching GET request")
+		return
+	}
+
+	fmt.Println(value)
+
+	cli.Compact()
+}
+```
+
+Output:
+
+```text
+value: asgdjkashdf5789
+Compaction Done
 ```
 
 ---
@@ -369,7 +430,7 @@ if err == nil {
 Output:
 
 ```text
-Ankit
+<User>
 ```
 
 ---
@@ -395,13 +456,15 @@ cli.Disconnect()
 ```text
 1. Start Server
        ↓
-2. Connect Client
+2. Create Client
        ↓
-3. SET / GET Operations
+3. Connect
        ↓
-4. COMPACT (Optional)
+4. SET / GET Operations
        ↓
-5. Disconnect Client
+5. COMPACT (Optional)
+       ↓
+6. Disconnect
 ```
 
 ---
@@ -437,29 +500,12 @@ This project helped deepen understanding of:
 | Log Compaction      | ✅     | ✅               |
 | Multiple Clients    | ✅     | ✅               |
 | Pub/Sub             | ✅     | ❌               |
-| Replication         | ✅     | ❌               |
-| Clustering          | ✅     | ❌               |
-| Transactions        | ✅     | ❌               |
-| TTL Expiry          | ✅     | ❌               |
+| Replication         | ❌     | ❌               |
+| Clustering          | ❌     | ❌               |
+| Transactions        | ❌     | ❌               |
+| TTL Expiry          | ❌     | ❌               |
 
 This project is intended as an educational implementation and is not meant to replace Redis.
-
----
-
-## Future Improvements
-
-* DELETE command
-* Key expiration (TTL)
-* Snapshot persistence
-* Background compaction
-* Authentication
-* Benchmark suite
-* Binary protocol support
-* Replication between servers
-* REST API Gateway
-* Docker support
-* Unit tests
-* Integration tests
 
 ---
 
@@ -467,4 +513,4 @@ This project is intended as an educational implementation and is not meant to re
 
 **Ankit Panchal**
 
-Built to explore the foundations of Redis-style cache servers, persistence mechanisms, networking, and systems programming in Go.
+Built to explore the foundations of Redis-style cache servers, persistence mechanisms, networking, concurrency, and systems programming in Go.
