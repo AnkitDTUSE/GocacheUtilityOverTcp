@@ -2,9 +2,9 @@
 
 A lightweight Redis-inspired key-value cache built in Go with TCP networking support.
 
-GoCache Utility Over TCP is a simple client-server cache system that allows applications to store and retrieve key-value pairs over a TCP connection. The server maintains an in-memory cache for high-speed access while persisting data to disk using an append-only storage model.
+GoCache Utility Over TCP is a client-server cache system that enables applications to store and retrieve key-value pairs over a TCP connection. The server maintains an in-memory cache for fast access while periodically persisting data to disk and automatically compacting storage in the background.
 
-This project was built to explore concepts behind distributed cache systems such as Redis, including networking, persistence, startup recovery, concurrent client handling, and log compaction.
+This project was built to explore concepts behind distributed cache systems such as Redis, including networking, persistence, startup recovery, concurrent client handling, synchronization, and storage optimization.
 
 ---
 
@@ -12,12 +12,14 @@ This project was built to explore concepts behind distributed cache systems such
 
 * TCP-based client-server architecture
 * In-memory key-value storage
-* Persistent CSV-backed storage
-* Append-only write strategy
-* Automatic recovery on startup
-* Manual log compaction
+* CSV-backed persistence
+* Automatic periodic snapshots
+* Automatic scheduled compaction
+* Startup recovery from persisted data
+* Graceful shutdown handling
 * JSON-based request protocol
 * Concurrent client handling using Goroutines
+* Thread-safe operations using RWMutex
 * Fast O(1) average lookups using Go maps
 * Simple client constructor API
 
@@ -48,9 +50,9 @@ This project was built to explore concepts behind distributed cache systems such
 +------------------+
 ```
 
-The server keeps all active data in memory while persisting updates to disk.
+The server keeps all active records in memory while periodically persisting them to disk.
 
-Clients communicate with the server using JSON messages over TCP.
+Clients communicate with the server using JSON messages over TCP connections.
 
 ---
 
@@ -58,7 +60,7 @@ Clients communicate with the server using JSON messages over TCP.
 
 ### In-Memory Storage
 
-The cache uses:
+The cache is maintained using:
 
 ```go
 map[string]string
@@ -68,71 +70,102 @@ This provides near O(1) average lookup and insertion performance.
 
 ---
 
+### Thread Safety
+
+Since multiple clients may access the cache simultaneously, synchronization is achieved using:
+
+```go
+var mut sync.RWMutex
+```
+
+This ensures safe concurrent reads and writes.
+
+---
+
 ### TCP Communication
 
 Clients send JSON requests to the server.
 
-Example:
+Example request:
 
 ```json
 {
   "cmd": "SET",
-  "key": "name",
-  "value": "YourName"
+  "key": "username",
+  "value": "Ankit"
 }
 ```
 
-The server processes the request and sends a response back over the same TCP connection.
-
----
-
-### Persistence
-
-Every successful `SET` operation is appended to a CSV file.
-
-Example:
-
-```csv
-path,C:
-username,<User>
-password,123456
-```
-
-This append-only strategy minimizes disk writes and mimics Redis-style AOF (Append Only File) persistence.
+The server processes the request and sends a response over the same connection.
 
 ---
 
 ### Startup Recovery
 
-When the server starts, it loads all records from `db.csv` and reconstructs the latest state of the cache.
-
-Example:
+When the server starts, it loads existing data from `db.csv` and reconstructs the in-memory cache.
 
 ```go
 LoadData()
 ```
 
+This ensures data survives server restarts.
+
 ---
 
-### Compaction
+### Automatic Persistence
 
-Since updates are appended rather than overwritten, duplicate key entries accumulate over time.
+The server periodically writes the current cache state to disk.
 
-Before compaction:
+Current configuration:
 
-```csv
-user,John
-user,Bob
-user,Charlie
+```go
+tickerWriteDb := time.NewTicker(5 * time.Second)
 ```
 
-After compaction:
+Benefits:
 
-```csv
-user,Charlie
+* Reduces risk of data loss
+* No manual save operation required
+* Automatic persistence in the background
+
+---
+
+### Automatic Compaction
+
+The server automatically compacts the database file.
+
+Current configuration:
+
+```go
+tickerCompact := time.NewTicker(11 * time.Second)
 ```
 
-This reduces storage size and improves recovery time.
+Compaction rewrites storage using only the latest values currently held in memory.
+
+Benefits:
+
+* Smaller storage size
+* Faster recovery times
+* Reduced duplicate entries
+
+---
+
+### Graceful Shutdown
+
+The server listens for:
+
+```text
+SIGINT
+SIGTERM
+```
+
+Before shutting down it:
+
+1. Persists the latest cache state
+2. Performs a final compaction
+3. Exits safely
+
+This helps prevent data loss.
 
 ---
 
@@ -162,7 +195,7 @@ OK
 
 ### GET
 
-Retrieve the latest value associated with a key.
+Retrieve a value by key.
 
 Request:
 
@@ -177,26 +210,6 @@ Response:
 
 ```text
 YourName
-```
-
----
-
-### COMPACT
-
-Rewrite the database file using only the latest values stored in memory.
-
-Request:
-
-```json
-{
-  "cmd": "COMPACT"
-}
-```
-
-Response:
-
-```text
-Compaction Complete
 ```
 
 ---
@@ -236,30 +249,9 @@ GocacheUtilityOverTcp
 
 ---
 
-## Recommended Project Structure
-
-When using this library, it is recommended to run the server as a separate process.
-
-```text
-my-project
-├── server
-│   ├── db.csv
-│   ├── server.go
-│   ├── go.mod
-│   └── go.sum
-│
-├── client.go
-├── go.mod
-└── go.sum
-```
-
-The server should be started before any client attempts to connect.
-
----
-
 ## Starting the Server
 
-Create `server/server.go`:
+Create:
 
 ```go
 package main
@@ -271,33 +263,32 @@ import (
 )
 
 func main() {
+
 	err := s.Start(3000, "tcp")
 
 	if err != nil {
-		fmt.Println("Error while starting server")
+		fmt.Println("error while starting server")
 	}
 }
 ```
 
-Run the server:
+Run:
 
 ```bash
-cd server
 go run .
 ```
 
 The server will:
 
-* Listen on port `3000`
-* Create or load `db.csv`
-* Recover previously stored data
-* Accept multiple concurrent client connections
+* Start listening on port 3000
+* Load existing data from disk
+* Accept multiple client connections
+* Automatically persist data
+* Automatically compact storage
 
 ---
 
 ## Creating a Client
-
-Create `client.go`:
 
 ```go
 package main
@@ -315,32 +306,30 @@ func main() {
 	cli.Connect()
 	defer cli.Disconnect()
 
-	cli.Set("key", "asgdjkashdf5789")
+	cli.Set("BUSY", "intern")
 
-	value, err := cli.Get("key")
+	value, err := cli.Get("BUSY")
 
 	if err != nil {
-		fmt.Println("error while fetching GET request")
+		fmt.Println(err)
 		return
 	}
 
-	fmt.Println(value)
-
-	cli.Compact()
+	fmt.Printf("value: %v\n", value)
 }
 ```
 
-Run:
+Output:
 
-```bash
-go run client.go
+```text
+value: intern
 ```
 
 ---
 
 ## Client Constructor
 
-The client package provides a constructor for creating client instances.
+Create a client using:
 
 ```go
 cli := c.NewClient(3000, "tcp", nil)
@@ -348,76 +337,23 @@ cli := c.NewClient(3000, "tcp", nil)
 
 Parameters:
 
-| Parameter      | Type     | Description                                |
-| -------------- | -------- | ------------------------------------------ |
-| port           | int      | TCP port of the cache server               |
-| connectionType | string   | Network protocol (typically `"tcp"`)       |
-| connObj        | net.Conn | Existing connection object (usually `nil`) |
-
-Example:
-
-```go
-cli := c.NewClient(3000, "tcp", nil)
-```
-
-This constructor simplifies initialization and follows idiomatic Go design patterns.
-
----
-
-## Example Usage
-
-```go
-package main
-
-import (
-	"fmt"
-
-	c "github.com/AnkitDTUSE/GocacheUtilityOverTcp/client"
-)
-
-func main() {
-
-	cli := c.NewClient(3000, "tcp", nil)
-
-	cli.Connect()
-	defer cli.Disconnect()
-
-	cli.Set("key", "asgdjkashdf5789")
-
-	value, err := cli.Get("key")
-
-	if err != nil {
-		fmt.Println("error while fetching GET request")
-		return
-	}
-
-	fmt.Println(value)
-
-	cli.Compact()
-}
-```
-
-Output:
-
-```text
-value: asgdjkashdf5789
-Compaction Done
-```
+| Parameter      | Type     | Description                              |
+| -------------- | -------- | ---------------------------------------- |
+| port           | int      | Server port                              |
+| connectionType | string   | Network protocol (typically tcp)         |
+| connObj        | net.Conn | Existing connection object (usually nil) |
 
 ---
 
 ## Example Operations
 
-### Writing Data
+### SET
 
 ```go
 cli.Set("username", "<User>")
-cli.Set("password", "123456")
 ```
 
----
-
-### Reading Data
+### GET
 
 ```go
 value, err := cli.Get("username")
@@ -433,21 +369,75 @@ Output:
 <User>
 ```
 
----
-
-### Compacting Storage
-
-```go
-cli.Compact()
-```
-
----
-
-### Disconnecting
+### Disconnect
 
 ```go
 cli.Disconnect()
 ```
+
+---
+
+## Performance Benchmarks
+
+### Sequential Performance (Single client multiple request) Before Auto Persistence and with SET response
+
+| Test                                        | Result     |
+| ------------------------------------------- | ---------- |
+| 10,000 SET Operations                       | 3349.81 µs |
+| 10,000 SET Operations (without server logs) | 2803.87 µs |
+| Single SET Latency                          | 116.73 µs  |
+
+---
+
+### Throughput
+
+| Clients | Operations per Client | Total Ops | Time   | Ops/sec |
+| ------- | --------------------- | --------- | ------ | ------- |
+| 100     | 1,000                 | 100,000   | 8.15s  | 12,267  |
+| 10      | 10,000                | 100,000   | 16.08s | 6,216   |
+| 1       | 100,000               | 100,000   | 31.36s | 3,186   |
+
+---
+
+### Persistence Impact (cleint * ops)
+
+| Mode              | Time   | Ops/sec |
+| ----------------- | ------ | ------- |
+| DB Write Enabled  | 11.55s | 8,651   |
+| DB Write Disabled (1 * 100000)| 13.57s | 7,365  |
+| DB Write Disabled (10 * 10000)| 12.96s | 7710.55|
+| DB Write Disabled (100 * 1000)| 7.07s  | 14,130 |
+
+---
+
+### Fire-and-Forget SET
+
+| Clients | Total Ops | Time  | Ops/sec |
+| ------- | --------- | ----- | ------- |
+| 1       | 100,000   | 753ms | 132,750 |
+| 10      | 100,000   | 221ms | 450,599 |
+| 100     | 100,000   | 220ms | 454,347 |
+
+---
+
+### Fire-and-Forget GET
+
+| Clients | Total Ops | Time  | Ops/sec |
+| ------- | --------- | ----- | ------- |
+| 100     | 100,000   | 737ms | 135,578 |
+| 10      | 100,000   | 839ms | 119,103 |
+| 1       | 100,000   | 2.77s | 35,991  |
+
+---
+
+### After Automatic Persistence
+
+| Clients | Total Ops | Time  | Ops/sec |
+| ------- | --------- | ----- | ------- |
+| 100     | 100,000   | 219ms | 456,436 |
+| 10      | 100,000   | 202ms | 494,695 |
+
+> These benchmarks are intended for educational and comparative purposes and are not production-grade benchmark results.
 
 ---
 
@@ -462,9 +452,11 @@ cli.Disconnect()
        ↓
 4. SET / GET Operations
        ↓
-5. COMPACT (Optional)
+5. Automatic Persistence
        ↓
-6. Disconnect
+6. Automatic Compaction
+       ↓
+7. Disconnect
 ```
 
 ---
@@ -475,14 +467,14 @@ This project helped deepen understanding of:
 
 * TCP Networking
 * Client-Server Architecture
-* JSON Serialization
 * Goroutines
-* Concurrent Connection Handling
+* Concurrent Programming
+* RWMutex Synchronization
+* JSON Serialization
 * In-Memory Databases
 * Persistence Mechanisms
-* Append-Only Logging
-* Log Compaction
-* File Handling
+* Storage Compaction
+* Graceful Shutdown Handling
 * Database Recovery
 * Systems Programming in Go
 
@@ -490,22 +482,38 @@ This project helped deepen understanding of:
 
 ## Comparison with Redis
 
-| Feature             | Redis | GoCache Utility |
-| ------------------- | ----- | --------------- |
-| In-Memory Storage   | ✅     | ✅               |
-| TCP Server          | ✅     | ✅               |
-| Key-Value Store     | ✅     | ✅               |
-| Persistence         | ✅     | ✅               |
-| Append-Only Logging | ✅     | ✅               |
-| Log Compaction      | ✅     | ✅               |
-| Multiple Clients    | ✅     | ✅               |
-| Pub/Sub             | ✅     | ❌               |
-| Replication         | ❌     | ❌               |
-| Clustering          | ❌     | ❌               |
-| Transactions        | ❌     | ❌               |
-| TTL Expiry          | ❌     | ❌               |
+| Feature            | Redis | GoCache Utility |
+| ------------------ | ----- | --------------- |
+| In-Memory Storage  | ✅     | ✅               |
+| TCP Server         | ✅     | ✅               |
+| Key-Value Store    | ✅     | ✅               |
+| Persistence        | ✅     | ✅               |
+| Multiple Clients   | ✅     | ✅               |
+| Automatic Recovery | ✅     | ✅               |
+| Pub/Sub            | ✅     | ❌               |
+| Replication        | ✅     | ❌               |
+| Clustering         | ✅     | ❌               |
+| Transactions       | ✅     | ❌               |
+| TTL Expiry         | ✅     | ❌               |
 
-This project is intended as an educational implementation and is not meant to replace Redis.
+This project is intended as an educational implementation and is not intended to replace Redis.
+
+---
+
+## Future Improvements
+
+* DELETE command
+* Key expiration (TTL)
+* Snapshot versioning
+* Authentication
+* Background replication
+* REST API Gateway
+* Binary protocol support
+* Docker support
+* Benchmark suite
+* Unit tests
+* Integration tests
+* Cluster support
 
 ---
 
@@ -513,4 +521,4 @@ This project is intended as an educational implementation and is not meant to re
 
 **Ankit Panchal**
 
-Built to explore the foundations of Redis-style cache servers, persistence mechanisms, networking, concurrency, and systems programming in Go.
+Built to explore the foundations of Redis-style cache systems, persistence mechanisms, networking, concurrency, and systems programming in Go.
