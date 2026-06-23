@@ -2,12 +2,10 @@ package server
 
 import (
 	"bufio"
-	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net"
-	"os"
 	"sync"
 )
 
@@ -23,9 +21,6 @@ func CacheUtil(mpp *map[string]string, conn net.Conn) {
 	fmt.Printf("Connection type: %s\n", connAddress.Network())
 
 	reader := bufio.NewReader(conn)
-
-	dbReopen, _ := os.OpenFile("db.csv", os.O_APPEND|os.O_RDWR|os.O_CREATE, 0644)
-	defer dbReopen.Close()
 
 	for {
 		request, err := reader.ReadString('\n')
@@ -53,19 +48,10 @@ func CacheUtil(mpp *map[string]string, conn net.Conn) {
 				fmt.Println("format to set value is SET <KEY> <VALUE>")
 				continue
 			}
-			recordWriter := csv.NewWriter(dbReopen) // create a writer to write new record in File
-			newRow := []string{data["key"], data["value"]}
 
 			mutex.Lock()
 			(*mpp)[data["key"]] = data["value"]
-			err := recordWriter.Write(newRow)
-			recordWriter.Flush()
 			mutex.Unlock()
-
-			if err != nil {
-				fmt.Println("error while writing")
-				continue
-			}
 		case "GET":
 			mutex.RLock()
 			value, ok := (*mpp)[data["key"]]
@@ -74,11 +60,6 @@ func CacheUtil(mpp *map[string]string, conn net.Conn) {
 			}
 			mutex.RUnlock()
 			fmt.Fprintln(conn, value)
-		case "COMPACT":
-			mutex.Lock()
-			Compaction(mpp)
-			mutex.Unlock()
-			fmt.Fprintln(conn, "compacting done")
 		default:
 			fmt.Fprintln(conn, "Invalid entry...retry")
 		}

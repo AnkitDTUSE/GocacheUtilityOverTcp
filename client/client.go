@@ -92,26 +92,3 @@ func (c *Client) Get(key string) (string, error) {
 	return response, nil
 }
 
-func (c *Client) Compact() error {
-	newRequest := Request{"COMPACT", nil, nil}
-
-	jsonRequest, _ := json.Marshal(newRequest)
-
-	_, err := c.ConnObj.Write(append(jsonRequest, '\n'))
-
-	if err != nil {
-		fmt.Println("error while sending COMPACT request")
-		return err
-	}
-
-	serverReader := bufio.NewReader(c.ConnObj)
-	response, err := serverReader.ReadString('\n')
-
-	if err != nil {
-		fmt.Println("read error")
-		return err
-	}
-
-	fmt.Println(response)
-	return nil
-}
