@@ -66,13 +66,11 @@ func CacheUtil(mpp *map[string]string, conn net.Conn) {
 				fmt.Println("error while writing")
 				continue
 			}
-			fmt.Println("Value Setted")
 
 			fmt.Fprintln(conn, "Value Setted successfully") // using Fprintln to automatically put a "\n" at the end
 		case "GET":
 			mutex.RLock()
 			value, ok := (*mpp)[data["key"]]
-			fmt.Println(value)
 			if !ok {
 				fmt.Fprintln(conn, "enter valid key")
 			}

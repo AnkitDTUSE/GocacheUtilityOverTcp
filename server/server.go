@@ -38,7 +38,7 @@ func Start(port int, connectionType string) error {
 		fmt.Println("error while starting server")
 	}
 
-	go LoadData()
+	LoadData()
 	defer listener.Close()
 
 	for {
