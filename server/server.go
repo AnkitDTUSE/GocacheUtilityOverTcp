@@ -6,11 +6,15 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 )
 
-var DataStorage = make(map[string]string)
+var (
+	DataStorage = make(map[string]string)
+	mut         sync.RWMutex
+)
 
 func LoadData() {
 	mpp := &DataStorage
@@ -42,6 +46,7 @@ func writeDb() error {
 	}
 
 	recordWriter := csv.NewWriter(db)
+	mut.Lock()
 	for key, value := range DataStorage {
 		record := []string{
 			string(key), string(value),
@@ -49,7 +54,7 @@ func writeDb() error {
 		recordWriter.Write(record)
 		recordWriter.Flush()
 	}
-
+	mut.Unlock()
 	return nil
 }
 
