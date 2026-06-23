@@ -55,7 +55,7 @@ func writeDb() error {
 
 func Start(port int, connectionType string) error {
 
-	LoadData()
+	LoadData() // loading data when server starts
 
 	listener, err := net.Listen(connectionType, fmt.Sprintf(":%v", port))
 	if err != nil {
