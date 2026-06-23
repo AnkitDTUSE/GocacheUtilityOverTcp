@@ -27,13 +27,13 @@ func NewClient(port int, connType string, connObject net.Conn) *Client {
 	}
 }
 
-func (c *Client) Connect() (net.Conn, error) {
+func (c *Client) Connect() error {
 	conn, err := net.Dial(c.ConnectionType, fmt.Sprintf(":%v", c.Port))
 	c.ConnObj = conn
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return c.ConnObj, nil
+	return nil
 }
 
 func (c *Client) Disconnect() error {
@@ -60,12 +60,6 @@ func (c *Client) Set(key string, value string) error {
 		return err
 	}
 
-	response, err := bufio.NewReader(c.ConnObj).ReadString('\n')
-	if err != nil {
-		fmt.Println("Read error: ", err)
-		return err
-	}
-	fmt.Print(response)
 	return nil
 }
 
